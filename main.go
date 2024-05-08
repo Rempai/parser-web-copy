@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	demoFolder       = "demo-in-extra"
-	outputFolder     = "demo-out"
+	demoFolder       = "demo-in"
+	outputFolder     = "csv-out"
 	outputExtension  = ".csv"
+	mapFilter        = false // bool whether you wanna filter demos for a specific map
+	mapToFilter      = ""    // string value of the map to filter. Options: "de_mirage",
 	loadingDelay     = 100 * time.Millisecond
 	defaultMaxWorker = 10
 	defaultWorkers   = 2
@@ -125,8 +127,8 @@ func main() {
 }
 
 func printProgress(processed, total int) {
-	// loading := getLoadingAnimation()
-	// fmt.Printf("\r%s Processed %d/%d demo files", loading, processed, total)
+	loading := getLoadingAnimation()
+	fmt.Printf("\r%s Processed %d/%d demo files", loading, processed, total)
 }
 
 func updateLoadingAnimation(done chan struct{}) {
@@ -137,7 +139,7 @@ func updateLoadingAnimation(done chan struct{}) {
 	for {
 		select {
 		case <-ticker.C:
-			// fmt.Printf("\r%s", loadingPatterns[animationIndex])
+			fmt.Printf("\r%s", loadingPatterns[animationIndex])
 			animationIndex = (animationIndex + 1) % len(loadingPatterns)
 		case <-done:
 			return
@@ -172,7 +174,7 @@ func processDemo(demoPath, outputPath string) {
 
 	// Write headers for CSV file including the new column for round number and win information
 	// headers := "Event,Round,Tick,CTPlayers,TPlayers,TeamDifference,Killer,Victim,Weapon,Winner,CTMoney,TMoney,MoneyDifference,KillerX,KillerY,VictimX,VictimY,KillDistance\n"
-	headers := "Event,Tick,Time,Round,RoundWinner,#CT,#T,#dif,$CT,$T,$dif,Weapon,Killer,Killer.X,Killer.Y,Victim,Victim.X,Victim.Y,CT#1 X,CT#1 Y,CT#2 X,CT#2 Y,CT#3 X,CT#3 Y,CT#4 X,CT#4 Y,CT#5 X,CT#5 Y,T#1 X,T#1 Y,T#2 X,T#2 Y,T#3 X,T#3 Y,T#4 X,T#4 Y,T#5 X,T#5 Y\n"
+	headers := "Event,Tick,Time,Round,RoundWinner,CTs Alive,Ts Alive,Alive Dif,CTs Equip Value,Ts Equip Value,Equip Value Dif,Weapon,Killer Name,Killer Pos(X),Killer Pos(Y),Killer Location,Victim Name,Victim Pos(X),Victim Pos(Y),Victim Location,CT#1 Name,CT#1 Pos(X),CT#1 Pos(Y),CT#1 Location,CT#2 Name,CT#2 Pos(X),CT#2 Pos(Y),CT#2 Location,CT#3 Name,CT#3 Pos(X),CT#3 Pos(Y),CT#3 Location,CT#4 Name,CT#4 Pos(X),CT#4 Pos(Y),CT#4 Location,CT#5 Name,CT#5 Pos(X),CT#5 Pos(Y),CT#5 Location,T#1 Name,T#1 Pos(X),T#1 Pos(Y),T#1 Location,T#2 Name,T#2 Pos(X),T#2 Pos(Y),T#2 Location,T#3 Name,T#3 Pos(X),T#3 Pos(Y),T#3 Location,T#4 Name,T#4 Pos(X),T#4 Pos(Y),T#4 Location,T#5 Name,T#5 Pos(X),T#5 Pos(Y),T#5 Location\n"
 	_, err = f.WriteString(headers)
 	if err != nil {
 		panic(err)
@@ -192,15 +194,16 @@ func processDemo(demoPath, outputPath string) {
 		EqValDif    int
 		Weapon      string
 		Killer      string
+		KillerLoc   string
 		KillerX     int
 		KillerY     int
 		Victim      string
+		VictimLoc   string
 		VictimX     int
 		VictimY     int
 	}
 
 	var csv EventVars
-	// fmt.Println(myvars)
 
 	// Open the demo file
 	demoFile, err := os.Open(demoPath)
@@ -220,20 +223,13 @@ func processDemo(demoPath, outputPath string) {
 		}
 	}
 
-	var (
-	// ctPlayers, tPlayers int
-	// roundNumber         = 0
-	// roundWinners        = make(map[int]string) // Map to store round winners by round number
-	)
+	var ()
 
 	// Register event handlers for processing demo events
 	parser.RegisterEventHandler(func(e events.RoundStart) {
 		csv.Round++
-		// roundNumber++ // Increment round number at the start of each round
 		csv.CTs = 5
-		// ctPlayers = 5
 		csv.Ts = 5
-		// tPlayers = 5
 	})
 
 	parser.RegisterEventHandler(func(e events.Kill) {
@@ -256,33 +252,35 @@ func processDemo(demoPath, outputPath string) {
 
 		var timer = parser.CurrentTime().Round(6 * time.Second)
 		csv.Time = timer.String()
-		// fmt.Println(myvars.Time)
 
 		// Track player names and positions, with an extra entry for killers and victims.
 		type PlayerPosition struct {
-			Name string
-			X    int
-			Y    int
+			Name     string
+			X        int
+			Y        int
+			Location string // test
 		}
+
 		type KillEventPositions struct {
 			Killer PlayerPosition
 			Victim PlayerPosition
 		}
 
 		var killEventPositions KillEventPositions
-		var CTPositions [5]PlayerPosition
-		var TPositions [5]PlayerPosition
+		var CTPositions [6]PlayerPosition // i dont know why but it crashes on array length of 5 with some demos, doesnt seem to be a side swap moment either
+		var TPositions [6]PlayerPosition
 
-		// There is no Killer for C4 kills.
+		// Avoid an error when there is no Killer for C4 kills.
 		if e.Weapon.String() != "C4" {
-			killEventPositions.Killer = PlayerPosition{e.Killer.Name, int(e.Killer.Position().X), int(e.Killer.Position().Y)}
+			killEventPositions.Killer = PlayerPosition{formatPlayer(e.Killer), int(e.Killer.Position().X), int(e.Killer.Position().Y), e.Killer.LastPlaceName()}
 		}
-		killEventPositions.Victim = PlayerPosition{e.Victim.Name, int(e.Victim.LastAlivePosition.X), int(e.Victim.LastAlivePosition.Y)}
+		killEventPositions.Victim = PlayerPosition{formatPlayer(e.Victim), int(e.Victim.LastAlivePosition.X), int(e.Victim.LastAlivePosition.Y), e.Victim.LastPlaceName()}
 
 		// Loop through both Teams, get names and locations.
 		for i, member := range parser.GameState().TeamCounterTerrorists().Members() {
 			if member.IsAlive() {
 				CTPositions[i].Name = member.Name
+				CTPositions[i].Location = member.LastPlaceName()
 				CTPositions[i].X, CTPositions[i].Y = int(member.Position().X), int(member.Position().Y)
 			}
 		}
@@ -291,28 +289,45 @@ func processDemo(demoPath, outputPath string) {
 		for i, member := range parser.GameState().TeamTerrorists().Members() {
 			if member.IsAlive() {
 				TPositions[i].Name = member.Name
+				TPositions[i].Location = member.LastPlaceName()
 				TPositions[i].X, TPositions[i].Y = int(member.Position().X), int(member.Position().Y)
 			}
 		}
 
-		// Write the event information to the file including the round number, team difference, and other details
-		// fmt.Println(csv)
-		csv.Killer = killEventPositions.Killer.Name
-		csv.KillerX = killEventPositions.Killer.X
-		csv.KillerY = killEventPositions.Killer.Y
-		csv.Victim = killEventPositions.Victim.Name
-		csv.VictimX = killEventPositions.Victim.X
-		csv.VictimY = killEventPositions.Victim.Y
+		// Storing all this information in two places at the moment because im dumb
+		csv.Killer, csv.KillerLoc = killEventPositions.Killer.Name, killEventPositions.Killer.Location
+		csv.KillerX, csv.KillerY = killEventPositions.Killer.X, killEventPositions.Killer.Y
+		csv.Victim, csv.VictimLoc = killEventPositions.Victim.Name, killEventPositions.Victim.Location
+		csv.VictimX, csv.VictimY = killEventPositions.Victim.X, killEventPositions.Victim.Y
 
-		// headers := "Event,Tick,Time,Round,RoundWinner,#CT,#T,#dif,$CT,$T,$dif,Weapon,Killer,Killer.X,Killer.Y,Victim,Victim.X,Victim.Y,CT[1].X,CT[1].Y,CT[2].X,CT[2].Y,CT[3].X,CT[3].Y,CT[4].X,CT[4].Y,CT[5].X,CT[5].Y,CT[1].X,CT[1].Y,CT[2].X,CT[2].Y,CT[3].X,CT[3].Y,CT[4].X,CT[4].Y,CT[5].X,CT[5].Y\n"
-		// fmt.Println(stringtowrite)
-		csvLine := fmt.Sprintf("%s,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", csv.Event, csv.Tick, csv.Time, csv.Round, csv.RoundWinner, csv.CTs, csv.Ts, csv.PlayerDif, csv.CTEqVal, csv.TEqVal, csv.EqValDif, csv.Weapon, csv.Killer, csv.KillerX, csv.KillerY, csv.Victim, csv.VictimX, csv.VictimY, CTPositions[0].X, CTPositions[0].Y, CTPositions[1].X, CTPositions[1].Y, CTPositions[2].X, CTPositions[2].Y, CTPositions[3].X, CTPositions[3].Y, CTPositions[4].X, CTPositions[4].Y, TPositions[0].X, TPositions[0].Y, TPositions[1].X, TPositions[1].Y, TPositions[2].X, TPositions[2].Y, TPositions[3].X, TPositions[3].Y, TPositions[4].X, TPositions[4].Y)
-		fmt.Println(csvLine)
+		// output
+		// Write the event information to the file including the round number, team difference, and other details
+		csvLine := fmt.Sprintf("%s,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,%s,%d,%d,%s,\n",
+			csv.Event, csv.Tick, csv.Time, csv.Round, csv.RoundWinner,
+			csv.CTs, csv.Ts, csv.PlayerDif,
+			csv.CTEqVal, csv.TEqVal, csv.EqValDif,
+			csv.Weapon,
+			csv.Killer, csv.KillerX, csv.KillerY, csv.KillerLoc,
+			csv.Victim, csv.VictimX, csv.VictimY, csv.VictimLoc,
+			CTPositions[0].Name, CTPositions[0].X, CTPositions[0].Y, CTPositions[0].Location,
+			CTPositions[1].Name, CTPositions[1].X, CTPositions[1].Y, CTPositions[0].Location,
+			CTPositions[2].Name, CTPositions[2].X, CTPositions[2].Y, CTPositions[0].Location,
+			CTPositions[3].Name, CTPositions[3].X, CTPositions[3].Y, CTPositions[0].Location,
+			CTPositions[4].Name, CTPositions[4].X, CTPositions[4].Y, CTPositions[0].Location,
+			TPositions[0].Name, TPositions[0].X, TPositions[0].Y, TPositions[0].Location,
+			TPositions[1].Name, TPositions[1].X, TPositions[1].Y, TPositions[1].Location,
+			TPositions[2].Name, TPositions[2].X, TPositions[2].Y, TPositions[2].Location,
+			TPositions[3].Name, TPositions[3].X, TPositions[3].Y, TPositions[3].Location,
+			TPositions[4].Name, TPositions[4].X, TPositions[4].Y, TPositions[4].Location,
+		)
 		_, err := f.WriteString(csvLine)
 
-		// msg := fmt.Sprintf("Kill,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%s,%d,%d,%d,%d\n",
-		// 	roundNumber, parser.GameState().IngameTick(), ctPlayers, tPlayers, csv.PlayerDif, formatPlayer(e.Killer), formatPlayer(e.Victim), e.Weapon.String(), "", csv.CTEqVal, csv.TEqVal, csv.Time, killEventPositions.Killer.X, killEventPositions.Killer.Y, killEventPositions.Victim.X, killEventPositions.Victim.Y)
-		// _, err := f.WriteString(msg)
+		// debug zone
+		// fmt.Println(CTPositions[0].Location)
+		// fmt.Println(parser.Header().MapName)
+		// fmt.Println(killEventPositions.Victim.Location)
+		// fmt.Println(csvLine)
+
 		checkError(err)
 	})
 
@@ -330,8 +345,9 @@ func processDemo(demoPath, outputPath string) {
 		// Write round end event to the file with the current round winner
 		// msg := fmt.Sprintf("RoundEnd,%d,%d,%d,%d,%s,,,,,%d,%d,%d\n", roundNumber, parser.GameState().IngameTick(), ctPlayers, tPlayers, roundWinners[roundNumber], ctMoney, tMoney, ctMoney-tMoney)
 		// _, err := f.WriteString(msg)
-		skipline := "\n"
-		f.WriteString(skipline)
+
+		// Empty line between rounds
+		f.WriteString("\n")
 		checkError(err)
 	})
 
