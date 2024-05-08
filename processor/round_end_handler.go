@@ -19,8 +19,11 @@ func RegisterRoundEndHandler(parser demoinfocs.Parser, f *os.File) {
 			csv.RoundWinner = 1
 		}
 
+		// Write CSV line to file
 		skipline := "\n"
 		_, err := f.WriteString(skipline)
-		checkError(err)
+		if err != nil {
+			panic(err)
+		}
 	})
 }

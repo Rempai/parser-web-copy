@@ -16,14 +16,10 @@ const (
 	demoFolder       = "demo-in"
 	outputFolder     = "csv-out"
 	outputExtension  = ".csv"
-	mapFilter        = false // bool whether you wanna filter demos for a specific map
-	mapToFilter      = ""    // string value of the map to filter. Options: "de_mirage",
 	loadingDelay     = 100 * time.Millisecond
 	defaultMaxWorker = 10
-	defaultWorkers   = 2
 )
 
-// "Resources" for the console output loading animation to use
 var loadingPatterns = []string{"[.  ]", "[.. ]", "[...]", "[ ..]", "[  .]"}
 
 func main() {
@@ -40,20 +36,6 @@ func main() {
 		panic(err)
 	}
 
-	// Calculate total file size of .dem files
-	var totalFileSize int64
-	for _, fileInfo := range demoFiles {
-		if fileInfo.IsDir() || !strings.HasSuffix(strings.ToLower(fileInfo.Name()), ".dem") {
-			continue
-		}
-		filePath := filepath.Join(demoFolder, fileInfo.Name())
-		info, err := os.Stat(filePath)
-		if err != nil {
-			panic(err)
-		}
-		totalFileSize += info.Size()
-	}
-
 	// Determine the number of workers based on the number of .dem files and available CPU cores
 	numFiles := len(demoFiles)
 	maxWorkers := runtime.NumCPU()
@@ -61,17 +43,10 @@ func main() {
 		maxWorkers = numFiles
 	}
 
-	// Output information about worker selection
-	if numFiles <= runtime.NumCPU() {
-		fmt.Printf("Found %d .dem files. Using %d workers based on file count.\n", numFiles, maxWorkers)
-	} else {
-		fmt.Printf("Found %d .dem files. Using %d workers optimized for %d CPU cores.\n", numFiles, maxWorkers, runtime.NumCPU())
-	}
+	fmt.Printf("Found %d .dem files. Using %d workers optimized for %d CPU cores.\n", numFiles, maxWorkers, runtime.NumCPU())
 
-	// Start time to measure total processing time
 	startTime := time.Now()
 
-	// Start goroutine to update the loading animation
 	loadingDone := make(chan struct{})
 	go updateLoadingAnimation(loadingDone)
 	defer close(loadingDone)
@@ -81,26 +56,31 @@ func main() {
 		work       = make(chan string)
 		processed  int
 		totalFiles = len(demoFiles)
+		corrupted  []string
 	)
 
-	// Print initial progress
 	printProgress(processed, totalFiles)
 
-	// Start workers
 	for i := 0; i < maxWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for demoPath := range work {
-				outputPath := filepath.Join(outputFolder, strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath))+outputExtension)
-				processor.ProcessDemo(demoPath, outputPath)
-				processed++
-				printProgress(processed, totalFiles)
+				outputFileName := strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath)) + outputExtension
+				outputPath := filepath.Join(outputFolder, outputFileName)
+				errCh := make(chan error, 1)
+				defer close(errCh)
+				processor.ProcessDemo(demoPath, outputPath, errCh)
+				if err := <-errCh; err != nil {
+					corrupted = append(corrupted, demoPath)
+					deleteOutputFile(outputPath)
+				} else {
+					processed++
+				}
 			}
 		}()
 	}
 
-	// Enqueue work
 	for _, fileInfo := range demoFiles {
 		if fileInfo.IsDir() {
 			continue // Skip directories
@@ -112,15 +92,18 @@ func main() {
 	}
 	close(work)
 
-	// Wait for all workers to finish
 	wg.Wait()
 
-	// Calculate total processing time
 	elapsed := time.Since(startTime)
 
-	// Print completion message and total processing time
-	// Print completion message with compact statistical presentation
-	fmt.Printf("\nProcessed %d files, totaling %.1f GB in %s\n", totalFiles, float64(totalFileSize)/(1024*1024*1024), elapsed)
+	fmt.Printf("\nProcessed %d files in %s\n", totalFiles, elapsed)
+
+	if len(corrupted) > 0 {
+		fmt.Println("\nCorrupted demo files:")
+		for _, file := range corrupted {
+			fmt.Println(file)
+		}
+	}
 }
 
 func printProgress(processed, total int) {
@@ -146,4 +129,11 @@ func updateLoadingAnimation(done chan struct{}) {
 
 func getLoadingAnimation() string {
 	return loadingPatterns[0]
+}
+
+func deleteOutputFile(outputPath string) {
+	err := os.Remove(outputPath)
+	if err != nil {
+		fmt.Printf("Error deleting output file %s: %v\n", outputPath, err)
+	}
 }
