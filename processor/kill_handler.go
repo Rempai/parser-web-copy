@@ -2,20 +2,39 @@ package processor
 
 import (
 	"fmt"
-	"time"
 	"os"
-	
+	"time"
+
 	demoinfocs "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
 	common "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
 	events "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/events"
+
 )
 
+// Reverse mapping from equipment type to its index
+var ReverseEquipmentIndexMapping = map[common.EquipmentType]uint64{}
+
+func init() {
+	// Initialize the reverse mapping
+	for index, equipmentType := range common.EquipmentIndexMapping {
+		ReverseEquipmentIndexMapping[equipmentType] = index
+	}
+}
 
 func RegisterKillHandler(parser demoinfocs.Parser, f *os.File) {
 	parser.RegisterEventHandler(func(e events.Kill) {
 		csv.Event = "Kill"
 		csv.Tick = parser.GameState().IngameTick()
-		csv.Weapon = e.Weapon.String()
+
+		// Check if the equipment type is within the known range
+		var weaponName string
+		if _, ok := ReverseEquipmentIndexMapping[e.Weapon.Type]; ok {
+			// Check if the equipment type exists in the mapping
+			weaponName = e.Weapon.Type.String()
+		} else {
+			weaponName = "UNKNOWN"
+		}
+		csv.Weapon = weaponName
 
 		// Update player counts based on team of victim
 		if e.Victim.Team == common.TeamCounterTerrorists {
@@ -49,7 +68,7 @@ func RegisterKillHandler(parser demoinfocs.Parser, f *os.File) {
 		var TPositions [5]PlayerPosition
 
 		// There is no Killer for C4 kills.
-		if e.Weapon.String() != "C4" {
+		if e.Weapon.Type != common.EqBomb {
 			killEventPositions.Killer = PlayerPosition{e.Killer.Name, int(e.Killer.Position().X), int(e.Killer.Position().Y)}
 		}
 		killEventPositions.Victim = PlayerPosition{e.Victim.Name, int(e.Victim.LastAlivePosition.X), int(e.Victim.LastAlivePosition.Y)}
