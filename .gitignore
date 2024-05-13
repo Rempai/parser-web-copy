@@ -1,2 +1,3 @@
 /csv-out/*
 /demo-in/*
+!/demo-in/put demos here.txt

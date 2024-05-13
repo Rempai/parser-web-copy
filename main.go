@@ -22,11 +22,6 @@ func main() {
 		panic(err)
 	}
 
-	// Create the demo folder if it doesn't exist
-	if err := os.MkdirAll(demoFolder, os.ModePerm); err != nil {
-		panic(err)
-	}
-
 	// Get all demo files in the demo folder
 	demoFiles, err := os.ReadDir(demoFolder)
 	if err != nil {
