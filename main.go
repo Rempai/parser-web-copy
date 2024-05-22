@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"parser-systeem/processing"
 )
@@ -12,6 +16,7 @@ import (
 const (
 	demoFolder   = "demo-in"
 	outputFolder = "csv-out"
+	staticFolder = "public" // Svelte build output folder
 )
 
 func main() {
@@ -40,12 +45,30 @@ func main() {
 	startTime := time.Now()
 
 	loadingDone := make(chan struct{})
-	go processing.UpdateLoadingAnimation(loadingDone) // Adjusted to exported function name
+	go processing.UpdateLoadingAnimation(loadingDone)
 	defer close(loadingDone)
 
-	processing.StartWorkers(maxWorkers, demoFiles, demoFolder, outputFolder) // Adjusted to exported function name
+	processing.StartWorkers(maxWorkers, demoFiles, demoFolder, outputFolder)
 
 	elapsed := time.Since(startTime)
-
 	fmt.Printf("\nProcessed %d files in %s\n", len(demoFiles), elapsed)
+
+	// Set up the Gin server
+	r := gin.Default()
+
+	// API endpoint
+	r.GET("/api/data", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Hello from Go",
+		})
+	})
+
+	// Serve static files from the Svelte build directory
+	r.Static("/static", staticFolder)
+	r.GET("/", func(c *gin.Context) {
+		c.File(filepath.Join(staticFolder, "index.html"))
+	})
+
+	// Start the server on port 8080
+	r.Run(":8080")
 }
