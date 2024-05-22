@@ -16,7 +16,7 @@ import (
 const (
 	demoFolder   = "demo-in"
 	outputFolder = "csv-out"
-	staticFolder = "public" // Svelte build output folder
+	staticFolder = "generated" // SvelteKit build output folder
 )
 
 func main() {
@@ -63,9 +63,9 @@ func main() {
 		})
 	})
 
-	// Serve static files from the Svelte build directory
+	// Serve static files from the SvelteKit build directory
 	r.Static("/static", staticFolder)
-	r.GET("/", func(c *gin.Context) {
+	r.NoRoute(func(c *gin.Context) {
 		c.File(filepath.Join(staticFolder, "index.html"))
 	})
 
