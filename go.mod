@@ -1,4 +1,4 @@
-module parser-systeem
+module parser-web
 
 go 1.22.3
 
