@@ -40,8 +40,8 @@ heroku_deploy:
   stage: heroku_deploy
   script:
     - curl https://cli-assets.heroku.com/install.sh | sh
-    - heroku login -i
-    - heroku git:remote -a $HEROKU_APP_NAME
-    - git push heroku HEAD:master
+    - /usr/local/bin/heroku auth:token --password=$HEROKU_PRODUCTION_KEY
+    - /usr/local/bin/heroku git:remote -a cs2-parser
+    - git push heroku HEAD:main
   environment:
     name: production
