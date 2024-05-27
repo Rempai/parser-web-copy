@@ -6,7 +6,6 @@ stages:
   - test
   - build
   - deploy
-  - heroku_deploy
 
 # Test stage: Format code, run vetting, and execute tests
 test:
@@ -27,21 +26,11 @@ build:
     paths:
       - binaries/*
 
-# Deploy stage: Define your deployment script
-deploy:
-  stage: deploy
-  script:
-    - echo "Define your deployment script!"
-  environment:
-    name: production
-
 # Heroku deployment stage: Deploy to Heroku
 heroku_deploy:
-  stage: heroku_deploy
+  stage: deploy
   script:
-    - curl https://cli-assets.heroku.com/install.sh | sh
-    - echo "$HEROKU_PRODUCTION_KEY" | /usr/local/bin/heroku login --stdin
-    - /usr/local/bin/heroku git:remote -a cs2-parser
-    - git push heroku HEAD:main
+    - gem install dpl
+    - dpl --provider=heroku --app=$HEROKU_APP_NAME --api-key=$HEROKU_PRODUCTION_KEY
   environment:
     name: production
