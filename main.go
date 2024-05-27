@@ -36,7 +36,7 @@ func main() {
 
 	// Enable CORS
 	config := cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // Update with your Svelte frontend URL without trailing slash
+		AllowOrigins:     []string{"https://strategy-master-tool-thuas-id-2324-spring-counte-34ebbbb5dd61de.gitlab.io"}, // Update with your Svelte frontend URL without trailing slash
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
 		AllowCredentials: true,
