@@ -1,5 +1,5 @@
 # Define the Docker image to use
-image: golang:1.16
+image: golang:latest
 
 # Define the stages of the CI/CD pipeline
 stages:
