@@ -26,10 +26,11 @@ build:
     paths:
       - binaries/*
 
-# Heroku deployment stage: Deploy to Heroku
+# Deploy stage: Install Ruby, RubyGems, and deploy to Heroku
 heroku_deploy:
   stage: deploy
   script:
+    - apt-get update && apt-get install -y ruby ruby-dev
     - gem install dpl
     - dpl --provider=heroku --app=$HEROKU_APP_NAME --api-key=$HEROKU_PRODUCTION_KEY
   environment:
