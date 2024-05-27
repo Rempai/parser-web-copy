@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"parser-systeem/processor"
+	"parser-web/processor"
 )
 
 func StartWorkers(maxWorkers int, demoFiles []os.DirEntry, demoFolder, outputFolder string) {
