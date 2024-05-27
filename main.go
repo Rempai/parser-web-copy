@@ -100,8 +100,12 @@ func main() {
 		c.File(filepath.Join(staticFolder, "index.html"))
 	})
 
-	// Start the server on port 8080
-	r.Run(":80")
+	// Start the server on the port specified by the PORT environment variable
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default to port 8080 if PORT environment variable is not set
+	}
+	r.Run(":" + port)
 }
 
 func processFile(filePath string) (string, error) {
